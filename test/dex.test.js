@@ -4,31 +4,35 @@ const truffleAssert = require("truffle-assertions");
 
 // should approve to enable deposits
 // every test should be independent
-contract("Dex", accounts => {
-    it("should only be possible for owner ot add tokens", async () => {
-        let dex = await Dex.deployed();
-        let link = await Link.deployed();
-        await truffleAssert.passes(
-            dex.addToken(web3.utils.fromUtf8("LINK"), link.address, {from: accounts[0]})
-        )
-    })
+contract("Dex", (accounts) => {
+  let dexContract, linkContract, linkSymbol;
+  beforeEach(async () => {
+    dexContract = await Dex.new();
+    linkContract = await Link.new();
+    linkSymbol = web3.utils.fromUtf8(linkContract.symbol);
+  });
 
-    it("should allow deposits when the token is added and approved", async () => {
-        let dex = await Dex.deployed();
-        let link = await Link.deployed();
-        await link.approve(dex.address, 500);
-        dex.addToken(web3.utils.fromUtf8("LINK"), link.address);
-        await dex.deposit(100, web3.utils.fromUtf8("LINK"));
-        let balanceOfLink = await dex.balances(accounts[0], web3.utils.fromUtf8("LINK"));
-        assert.equal(balanceOfLink.toNumber(), 100);
-    })
+  it("should only be possible for owner ot add tokens", async () => {
+    await truffleAssert.passes(
+      dexContract.addToken(linkSymbol, linkContract.address)
+    );
+  });
+
+  describe("Given an approved and added token to the dex", () => {
+    beforeEach(async () => {
+      await linkContract.approve(dexContract.address, 500);
+      dexContract.addToken(linkSymbol, linkContract.address);
+    });
+
+    it("should allow deposits", async () => {
+      await dexContract.deposit(100, linkSymbol);
+      let balanceOfLink = await dexContract.balances(accounts[0], linkSymbol);
+      assert.equal(balanceOfLink.toNumber(), 100);
+    });
 
     it("should not allow withdraws when address balance is not enough", async () => {
-        let dex = await Dex.deployed();
-        let link = await Link.deployed();
-        await truffleAssert.reverts(
-            dex.withdraw(500, web3.utils.fromUtf8("LINK"))
-        )
-    })
-
+      await dexContract.deposit(100, linkSymbol);
+      await truffleAssert.reverts(dexContract.withdraw(500, linkSymbol));
+    });
+  });
 });
